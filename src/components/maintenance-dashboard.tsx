@@ -154,9 +154,6 @@ export function MaintenanceDashboard({
   const [jobPriority, setJobPriority] = useState("Medium");
   const [jobRequiredSkills, setJobRequiredSkills] = useState<string[]>([]);
 
-  const [skillName, setSkillName] = useState("");
-  const [skillDescription, setSkillDescription] = useState("");
-
   const [inspector, setInspector] = useState("tech.operator");
   const [inspectedAt, setInspectedAt] = useState(toLocalDateTimeValue());
   const [sessionNotes, setSessionNotes] = useState("");
@@ -207,22 +204,6 @@ export function MaintenanceDashboard({
       setTrends(trendResponse.trends);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
-    }
-  }
-
-  async function createSkill(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    try {
-      await request<{ skill: Skill }>("/api/skills", {
-        method: "POST",
-        body: JSON.stringify({ name: skillName, description: skillDescription || null }),
-      });
-      setSkillName("");
-      setSkillDescription("");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create skill");
     }
   }
 
@@ -406,32 +387,6 @@ export function MaintenanceDashboard({
       ) : null}
 
       <section className="grid-cards">
-        <article className="card">
-          <h2>Skill Catalog</h2>
-          <form className="stack" onSubmit={createSkill}>
-            <input
-              data-testid="skill-name-input"
-              placeholder="Electrical"
-              value={skillName}
-              onChange={(event) => setSkillName(event.target.value)}
-              required
-            />
-            <input
-              placeholder="Description"
-              value={skillDescription}
-              onChange={(event) => setSkillDescription(event.target.value)}
-            />
-            <button type="submit" className="btn-primary" data-testid="create-skill-button">
-              Create Skill
-            </button>
-          </form>
-          <ul className="chip-list" data-testid="skill-list">
-            {skills.map((skill) => (
-              <li key={skill.id}>{skill.name}</li>
-            ))}
-          </ul>
-        </article>
-
         <article className="card">
           <h2>Create Job</h2>
           <form className="stack" onSubmit={createJob}>

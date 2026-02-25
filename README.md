@@ -54,6 +54,8 @@ npm run dev
 - `IMPORT_STRICT`: when `true`, import fails if warnings are produced.
 - `USE_IN_MEMORY_REPO`: set `true` to run without database (useful for tests).
 - `FEATURE_CHECKLIST_ENABLED`: defaults to `true`; set to `false` to disable checklist APIs/UI flow.
+- Production template file: `.env.production.example` (tracked).
+- Production real secrets: `.env.production.local` (not committed).
 
 ## Scripts
 - `npm run dev`
@@ -62,10 +64,41 @@ npm run dev
 - `npm run test:e2e`
 - `npm run test:import`
 - `npm run test:seed`
+- `npm run test:deploy`
 - `npm run import:sabbath`
 - `npm run seed:team-members`
+- `npm run deploy:vercel:preflight`
+- `npm run deploy:vercel:preview`
+- `npm run deploy:vercel:prod`
 - `npm run prisma:generate`
 - `npm run prisma:migrate`
+
+## Deploy To Vercel (From GitHub Repo)
+1. Push this project to a GitHub repository.
+2. In Vercel, choose `Add New... -> Project` and import the GitHub repository.
+3. Configure production environment variables:
+   - Set `DATABASE_URL` to your Neon PostgreSQL connection string (the one provided for this project).
+   - For local production testing, place the same value in `.env.production.local`.
+   - Demo/ephemeral path: set `USE_IN_MEMORY_REPO=true`.
+   - Optional: set `FEATURE_CHECKLIST_ENABLED` as needed (`true` by default).
+4. Trigger deploy from Vercel (Git push) or CLI.
+
+## Deploy To Vercel (CLI)
+Preview deploy:
+```bash
+npm run deploy:vercel:preview
+```
+
+Production deploy:
+```bash
+npm run deploy:vercel:prod
+```
+
+Readiness checks enforced by deploy scripts:
+- `vercel` CLI is installed and authenticated.
+- Local repo `origin` points to GitHub.
+- Vercel project link exists (`vercel link`).
+- Environment is deployable for target mode (production requires PostgreSQL protocol and rejects `DATABASE_URL=file:*`).
 
 ## Rollback Toggle
 - Checklist rollout is feature-flagged.

@@ -28,9 +28,16 @@ test("can create skill, create job, log run, and complete", async ({ page }) => 
   const skillName = `Electrical-${runId}`;
   const jobTitle = `Replace filter on Pump #3 (${runId})`;
 
+  await page.getByTestId("sidebar-link-skills").click();
+  await expect(page).toHaveURL(/\/skills$/);
+  await expect(page.getByTestId("sidebar-link-skills")).toHaveAttribute("aria-current", "page");
+
   await page.getByTestId("skill-name-input").fill(skillName);
   await page.getByTestId("create-skill-button").click();
   await expect(page.getByTestId("skill-list")).toContainText(skillName);
+
+  await page.getByTestId("sidebar-link-dashboard").click();
+  await expect(page).toHaveURL(/\/$/);
 
   await page.getByTestId("job-title-input").fill(jobTitle);
   await page.getByTestId("job-due-date-input").fill(futureLocalDateTime());
@@ -63,6 +70,15 @@ test("can create skill, create job, log run, and complete", async ({ page }) => 
   await expect(page.getByTestId("jobs-directory-list")).toContainText("Sub-location: Pump Bay 3");
   await expect(page.getByTestId("jobs-directory-list")).toContainText("Done by: tech.operator");
   await expect(page.getByTestId("jobs-directory-list")).toContainText("Checked by: qa.supervisor");
+});
+
+test("dashboard removes inline skill catalog and uses sidebar skills page", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Skill Catalog" })).toHaveCount(0);
+
+  await page.getByTestId("sidebar-link-skills").click();
+  await expect(page).toHaveURL(/\/skills$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Skill Catalog" })).toBeVisible();
 });
 
 test("jobs API includes metadata fields with null-safe defaults", async ({ request }) => {
