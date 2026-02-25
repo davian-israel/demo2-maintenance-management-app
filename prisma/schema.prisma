@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Job {
+  id                  String             @id @default(cuid())
+  title               String
+  description         String?
+  assetId             String?
+  assetName           String?
+  location            String?
+  subLocation         String?
+  locationRef         String?
+  priority            String
+  status              String
+  createdAt           DateTime           @default(now())
+  scheduledFor        DateTime?
+  dueDate             DateTime
+  assignedTo          String?
+  doneBy              String?
+  checkedBy           String?
+  completedAt         DateTime?
+  cancelledReason     String?
+  sourceObservationId String?            @unique
+  sourceObservation   Observation?       @relation(fields: [sourceObservationId], references: [id], onDelete: SetNull)
+  version             Int                @default(1)
+  runLog              RunLogEntry[]
+  requiredSkills      JobRequiredSkill[]
+
+  @@index([status])
+  @@index([dueDate])
+  @@index([createdAt])
+}
+
+model RunLogEntry {
+  id              String      @id @default(cuid())
+  jobId            String
+  startedAt        DateTime
+  endedAt          DateTime?
+  performedBy      String
+  notes            String
+  outcome          String
+  timeSpentMinutes Int?
+  createdAt        DateTime    @default(now())
+  job              Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([startedAt])
+}
+
+model Skill {
+  id          String             @id @default(cuid())
+  name        String             @unique
+  description String?
+  isActive    Boolean            @default(true)
+  retiredAt   DateTime?
+  jobs        JobRequiredSkill[]
+}
+
+model JobRequiredSkill {
+  jobId   String
+  skillId String
+  job     Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill   Skill @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  @@id([jobId, skillId])
+  @@index([skillId])
+}
+
+model TeamMember {
+  teamMemberId String            @id
+  name         String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  skills       TeamMemberSkill[]
+
+  @@index([name])
+}
+
+model TeamMemberSkill {
+  teamMemberId    String
+  skillId         String
+  name            String
+  skillPercentage Int
+  teamMember      TeamMember @relation(fields: [teamMemberId], references: [teamMemberId], onDelete: Cascade)
+
+  @@id([teamMemberId, skillId])
+  @@index([name])
+}
+
+model Sector {
+  id           String              @id @default(cuid())
+  name         String              @unique
+  createdAt    DateTime            @default(now())
+  checklist    SectorChecklistItem[]
+  observations Observation[]
+}
+
+model ChecklistComponent {
+  id           String              @id @default(cuid())
+  name         String              @unique
+  isActive     Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  checklist    SectorChecklistItem[]
+  observations Observation[]
+}
+
+model SectorChecklistItem {
+  id          String             @id @default(cuid())
+  sectorId    String
+  componentId String
+  required    Boolean            @default(true)
+  displayOrder Int
+  sector      Sector             @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  component   ChecklistComponent @relation(fields: [componentId], references: [id], onDelete: Restrict)
+
+  @@unique([sectorId, componentId])
+  @@index([sectorId, displayOrder])
+}
+
+model InspectionSession {
+  id          String        @id @default(cuid())
+  inspector   String
+  inspectedAt DateTime      @default(now())
+  notes       String?
+  finalizedAt DateTime?
+  createdAt   DateTime      @default(now())
+  observations Observation[]
+
+  @@index([inspectedAt])
+}
+
+model Observation {
+  id              String             @id @default(cuid())
+  sessionId        String
+  sectorId         String
+  componentId      String
+  status           String
+  observedAt       DateTime
+  inspector        String
+  comments         String?
+  additionalNotes  String?
+  resolvedAt       DateTime?
+  createdAt        DateTime           @default(now())
+  session          InspectionSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sector           Sector             @relation(fields: [sectorId], references: [id], onDelete: Restrict)
+  component        ChecklistComponent @relation(fields: [componentId], references: [id], onDelete: Restrict)
+  correctiveJob    Job?
+
+  @@unique([sessionId, sectorId, componentId])
+  @@index([status, resolvedAt])
+  @@index([observedAt])
+}

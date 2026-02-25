@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Maintenance Management App (Next.js + DDD + Prisma + SQLite)
 
-## Getting Started
+A modern Next.js application implementing the requested Maintenance Management domain model using DDD boundaries, strong Zod validation, Prisma persistence (SQLite), theme toggle (light/dark), and Playwright e2e verification.
 
-First, run the development server:
+## Stack
+- Next.js App Router + TypeScript
+- Zod command validation
+- DDD-style domain/application/infrastructure separation
+- Prisma ORM with SQLite
+- Playwright end-to-end tests
+- Vercel-ready deployment setup
 
+## Architecture
+- OpenSpec domain file: [`OPENSPEC.md`](/Users/davian/Desktop/projects/demo2/OPENSPEC.md)
+- Domain layer: `src/domain/*`
+- Application use cases: `src/application/*`
+- Infrastructure adapters: `src/infrastructure/*`
+- HTTP routes: `src/app/api/*`
+- UI: `src/components/*`, `src/app/*`
+
+## Local Setup
+1. Install deps:
+```bash
+npm install
+```
+2. Copy env:
+```bash
+cp .env.example .env
+```
+3. Generate Prisma client:
+```bash
+npm run prisma:generate
+```
+4. (First DB setup) apply migrations:
+```bash
+npm run prisma:migrate
+```
+5. Import workbook data:
+```bash
+npm run import:sabbath
+```
+6. Seed baseline team members (idempotent, non-destructive upsert):
+```bash
+npm run seed:team-members
+```
+7. Run app:
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment
+- `DATABASE_URL`: SQLite Prisma URL (for example `file:./dev.db`).
+- `SABBATH_WORKBOOK_PATH`: absolute path to the workbook used by import.
+- `IMPORT_STRICT`: when `true`, import fails if warnings are produced.
+- `USE_IN_MEMORY_REPO`: set `true` to run without database (useful for tests).
+- `FEATURE_CHECKLIST_ENABLED`: defaults to `true`; set to `false` to disable checklist APIs/UI flow.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
+- `npm run dev`
+- `npm run build` (runs `prisma generate` first)
+- `npm run lint`
+- `npm run test:e2e`
+- `npm run test:import`
+- `npm run test:seed`
+- `npm run import:sabbath`
+- `npm run seed:team-members`
+- `npm run prisma:generate`
+- `npm run prisma:migrate`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Rollback Toggle
+- Checklist rollout is feature-flagged.
+- To roll back checklist behavior without schema rollback, set:
+  - `FEATURE_CHECKLIST_ENABLED=false`
+- Effect:
+  - Checklist routes return feature-disabled errors.
+  - Dashboard loads without checklist catalog/finding/trend data.
+  - Existing job/skill flows continue operating.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Playwright Verification
+Tests are in [`tests/maintenance.spec.ts`](/Users/davian/Desktop/projects/demo2/tests/maintenance.spec.ts).
+The config boots Next.js against SQLite e2e database and verifies:
+- Light/dark theme toggle.
+- Skill creation.
+- Job creation.
+- Job start -> log run -> complete lifecycle.
+- Checklist validation rejects unknown sector/component.
+- Checklist failure -> corrective job -> completion resolves finding.
