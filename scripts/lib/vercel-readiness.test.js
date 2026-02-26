@@ -11,6 +11,7 @@ const baseContext = {
   vercelAuthenticated: true,
   originUrl: "https://github.com/example/repo.git",
   vercelLinked: true,
+  postgresPrismaClientGenerated: true,
 };
 
 test("readiness passes for preview with valid context", () => {
@@ -68,6 +69,18 @@ test("readiness fails for production with non-postgresql URL", () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.errors.some((error) => error.includes("must use PostgreSQL protocol")),
+  );
+});
+
+test("readiness fails for production when postgres prisma client is not generated", () => {
+  const result = evaluateVercelReadiness({
+    target: "production",
+    ...baseContext,
+    postgresPrismaClientGenerated: false,
+  });
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes("PostgreSQL Prisma client is not generated")),
   );
 });
 

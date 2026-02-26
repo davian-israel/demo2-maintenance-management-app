@@ -62,6 +62,10 @@ function isPostgresUrl(value) {
   return /^postgres(?:ql)?:\/\//i.test(value);
 }
 
+function hasPostgresPrismaClient(cwd) {
+  return fs.existsSync(path.join(cwd, "generated", "postgresql-client", "index.js"));
+}
+
 function commandExists(command) {
   const result = spawnSync("sh", ["-lc", `command -v ${command}`], {
     encoding: "utf8",
@@ -100,6 +104,7 @@ function evaluateVercelReadiness(input) {
     vercelAuthenticated,
     originUrl,
     vercelLinked,
+    postgresPrismaClientGenerated,
   } = input;
 
   const errors = [];
@@ -124,6 +129,12 @@ function evaluateVercelReadiness(input) {
   if (!vercelLinked) {
     errors.push(
       "Vercel project is not linked in this directory. Run `vercel link` before deployment.",
+    );
+  }
+
+  if (target === "production" && isPostgresUrl(databaseUrl) && !postgresPrismaClientGenerated) {
+    errors.push(
+      "PostgreSQL Prisma client is not generated. Run `npm run prisma:generate` before production deployment.",
     );
   }
 
@@ -169,6 +180,7 @@ function loadReadinessContext(cwd, env, target = "preview") {
     vercelAuthenticated,
     originUrl: readGitOrigin(cwd),
     vercelLinked: hasVercelProjectLink(cwd),
+    postgresPrismaClientGenerated: hasPostgresPrismaClient(cwd),
   };
 }
 
