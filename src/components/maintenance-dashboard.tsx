@@ -1,40 +1,25 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-
-type Skill = {
-  id: string;
-  name: string;
-  description: string | null;
-  isActive: boolean;
-};
-
-type Sector = {
-  id: string;
-  name: string;
-  items: Array<{
-    id: string;
-    componentId: string;
-    componentName: string;
-    required: boolean;
-    displayOrder: number;
-  }>;
-};
-
-type Run = {
-  id: string;
-  startedAt: string | Date;
-  endedAt: string | Date | null;
-  performedBy: string;
-  notes: string;
-  outcome: string;
-  timeSpentMinutes: number | null;
-};
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 type Job = {
   id: string;
   title: string;
-  description: string | null;
   dueDate: string | Date;
   status: string;
   priority: string;
@@ -43,27 +28,17 @@ type Job = {
   assignedTo: string | null;
   doneBy: string | null;
   checkedBy: string | null;
-  requiredSkills: string[];
-  runLog: Run[];
-  sourceObservationId: string | null;
-  sourceObservationContext: {
-    sessionId: string;
-    sectorName: string;
-    componentName: string;
-    status: string;
-  } | null;
+  runLog: Array<{
+    id: string;
+    timeSpentMinutes: number | null;
+    outcome: string;
+  }>;
 };
 
 type Finding = {
   observationId: string;
-  sessionId: string;
   sectorName: string;
   componentName: string;
-  inspector: string;
-  observedAt: string | Date;
-  comments: string | null;
-  additionalNotes: string | null;
-  linkedJobId: string | null;
   linkedJobStatus: string | null;
 };
 
@@ -93,8 +68,30 @@ type ReportSummary = {
   sourceLinkedJobsCount: number;
 };
 
-const outcomeOptions = ["ProgressMade", "Blocked", "NoAccess", "Failed", "CompletedWork"];
-const checklistStatusOptions = ["Pass", "Fail", "NotApplicable", "NotInspected"];
+const COLORS = {
+  primary: "#0b7285",
+  secondary: "#16a34a",
+  warning: "#f59e0b",
+  danger: "#ef4444",
+  info: "#3b82f6",
+  purple: "#8b5cf6",
+  pink: "#ec4899",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  Scheduled: COLORS.primary,
+  InProgress: COLORS.warning,
+  Completed: COLORS.secondary,
+  Cancelled: COLORS.danger,
+  OnHold: COLORS.purple,
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  Critical: COLORS.danger,
+  High: COLORS.warning,
+  Medium: COLORS.info,
+  Low: COLORS.secondary,
+};
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -110,204 +107,155 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-function toLocalDateTimeValue(date = new Date()) {
-  const offsetMs = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-}
-
-function metadataValue(value: string | null) {
-  return value && value.trim().length > 0 ? value : "Not set";
-}
-
-type DashboardProps = {
-  initialSkills: Skill[];
-  initialJobs: Job[];
-  initialSummary: ReportSummary;
-  initialSectors: Sector[];
-  initialFindings: Finding[];
-  initialTrends: FailureTrend[];
+type DashboardData = {
+  jobs: Job[];
+  summary: ReportSummary;
+  findings: Finding[];
+  trends: FailureTrend[];
 };
 
-export function MaintenanceDashboard({
-  initialSkills,
-  initialJobs,
-  initialSummary,
-  initialSectors,
-  initialFindings,
-  initialTrends,
-}: DashboardProps) {
-  const [jobs, setJobs] = useState<Job[]>(initialJobs);
-  const [summary, setSummary] = useState<ReportSummary | null>(initialSummary);
-  const [sectors, setSectors] = useState<Sector[]>(initialSectors);
-  const [findings, setFindings] = useState<Finding[]>(initialFindings);
-  const [trends, setTrends] = useState<FailureTrend[]>(initialTrends);
-
-  const [inspector, setInspector] = useState("tech.operator");
-  const [inspectedAt, setInspectedAt] = useState(toLocalDateTimeValue());
-  const [sessionNotes, setSessionNotes] = useState("");
-  const [observationValues, setObservationValues] = useState<
-    Record<
-      string,
-      {
-        status: string;
-        comments: string;
-        additionalNotes: string;
-      }
-    >
-  >({});
-
+export function MaintenanceDashboard() {
+  const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const completionRate = useMemo(() => {
-    if (!summary) return 0;
-    const created = summary.monthly.reduce((sum, row) => sum + row.createdCount, 0);
-    const completed = summary.monthly.reduce((sum, row) => sum + row.completedCount, 0);
-    if (created === 0) return 0;
-    return Math.round((completed / created) * 100);
-  }, [summary]);
-
-  async function loadAll() {
+  const loadData = useCallback(async () => {
+    setLoading(true);
     setError(null);
     try {
-      const [
-        jobResponse,
-        reportResponse,
-        catalogResponse,
-        findingsResponse,
-        trendResponse,
-      ] = await Promise.all([
+      const [jobsResponse, summaryResponse, findingsResponse, trendsResponse] = await Promise.all([
         request<{ jobs: Job[] }>("/api/jobs"),
         request<{ summary: ReportSummary }>("/api/reports/summary"),
-        request<{ sectors: Sector[] }>("/api/checklist/catalog"),
         request<{ findings: Finding[] }>("/api/checklist/findings/unresolved"),
         request<{ trends: FailureTrend[] }>("/api/checklist/trends"),
       ]);
-      setJobs(jobResponse.jobs);
-      setSummary(reportResponse.summary);
-      setSectors(catalogResponse.sectors);
-      setFindings(findingsResponse.findings);
-      setTrends(trendResponse.trends);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load data");
-    }
-  }
 
-  async function mutateJob(jobId: string, action: "start" | "complete" | "cancel") {
-    setError(null);
-    try {
-      await request<{ job: Job }>(`/api/jobs/${jobId}/${action}`, {
-        method: "POST",
-        body: action === "cancel" ? JSON.stringify({ reason: "Cancelled from dashboard" }) : undefined,
+      setData({
+        jobs: jobsResponse.jobs,
+        summary: summaryResponse.summary,
+        findings: findingsResponse.findings,
+        trends: trendsResponse.trends,
       });
-      await loadAll();
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Could not ${action} job`);
+      setError(err instanceof Error ? err.message : "Failed to load dashboard data");
+    } finally {
+      setLoading(false);
     }
-  }
+  }, []);
 
-  async function logRun(jobId: string, outcome: string) {
-    setError(null);
-    try {
-      const now = new Date();
-      const start = new Date(now.getTime() - 30 * 60 * 1000);
-      await request<{ job: Job }>(`/api/jobs/${jobId}/runs`, {
-        method: "POST",
-        body: JSON.stringify({
-          startedAt: start.toISOString(),
-          endedAt: now.toISOString(),
-          performedBy: "tech.operator",
-          notes: "Run logged from dashboard quick action.",
-          outcome,
-          timeSpentMinutes: 30,
-        }),
-      });
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not log run");
-    }
-  }
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  async function seedCatalog() {
-    setError(null);
-    try {
-      await request<{ createdOrUpdated: number }>("/api/checklist/seed", {
-        method: "POST",
-      });
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not seed checklist catalog");
-    }
-  }
+  const stats = useMemo(() => {
+    if (!data) return null;
 
-  async function submitChecklistSession(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-
-    try {
-      if (sectors.length === 0) {
-        throw new Error("Checklist catalog is empty. Seed or create sectors first.");
-      }
-
-      const observations = sectors.flatMap((sector) =>
-        sector.items.map((item) => {
-          const key = `${sector.id}:${item.componentId}`;
-          const value = observationValues[key] ?? {
-            status: "NotInspected",
-            comments: "",
-            additionalNotes: "",
-          };
-
-          return {
-            sectorName: sector.name,
-            componentName: item.componentName,
-            status: value.status,
-            observedAt: new Date(inspectedAt).toISOString(),
-            comments: value.comments || null,
-            additionalNotes: value.additionalNotes || null,
-          };
-        }),
-      );
-
-      const sessionResponse = await request<{ session: { id: string } }>("/api/checklist/sessions", {
-        method: "POST",
-        body: JSON.stringify({
-          inspector,
-          inspectedAt: new Date(inspectedAt).toISOString(),
-          notes: sessionNotes || null,
-          observations,
-        }),
-      });
-
-      await request<{ session: { id: string } }>(
-        `/api/checklist/sessions/${sessionResponse.session.id}/finalize`,
-        {
-          method: "POST",
-        },
-      );
-
-      setObservationValues({});
-      setSessionNotes("");
-      setInspectedAt(toLocalDateTimeValue());
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not submit inspection session");
-    }
-  }
-
-  function setObservationField(
-    key: string,
-    field: "status" | "comments" | "additionalNotes",
-    value: string,
-  ) {
-    setObservationValues((current) => ({
-      ...current,
-      [key]: {
-        status: current[key]?.status ?? "NotInspected",
-        comments: current[key]?.comments ?? "",
-        additionalNotes: current[key]?.additionalNotes ?? "",
-        [field]: value,
+    const totalJobs = data.jobs.length;
+    const statusCounts = data.jobs.reduce(
+      (acc, job) => {
+        acc[job.status] = (acc[job.status] || 0) + 1;
+        return acc;
       },
+      {} as Record<string, number>,
+    );
+
+    const priorityCounts = data.jobs.reduce(
+      (acc, job) => {
+        acc[job.priority] = (acc[job.priority] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    const totalRunTime = data.jobs.reduce(
+      (sum, job) => sum + job.runLog.reduce((s, r) => s + (r.timeSpentMinutes || 0), 0),
+      0,
+    );
+
+    const avgCompletionTime = (() => {
+      const completedJobs = data.jobs.filter((j) => j.status === "Completed");
+      if (completedJobs.length === 0) return 0;
+      return Math.round(totalRunTime / completedJobs.length);
+    })();
+
+    const monthly = data.summary.monthly;
+    const currentMonth = monthly[monthly.length - 1] || { createdCount: 0, completedCount: 0 };
+
+    const completionRate = currentMonth.createdCount > 0
+      ? Math.round((currentMonth.completedCount / currentMonth.createdCount) * 100)
+      : 0;
+
+    const jobsCreatedThisMonth = currentMonth.createdCount;
+    const jobsCompletedThisMonth = currentMonth.completedCount;
+
+    return {
+      totalJobs,
+      statusCounts,
+      priorityCounts,
+      totalRunTime,
+      avgCompletionTime,
+      completionRate,
+      jobsCreatedThisMonth,
+      jobsCompletedThisMonth,
+      overdueCount: data.summary.overdueCount,
+      unresolvedFindings: data.summary.unresolvedFindingsCount,
+      sourceLinkedJobs: data.summary.sourceLinkedJobsCount,
+    };
+  }, [data]);
+
+  const statusPieData = useMemo(() => {
+    if (!stats) return [];
+    return Object.entries(stats.statusCounts).map(([name, value]) => ({ name, value }));
+  }, [stats]);
+
+  const priorityBarData = useMemo(() => {
+    if (!stats) return [];
+    return Object.entries(stats.priorityCounts).map(([name, value]) => ({ name, value }));
+  }, [stats]);
+
+  const monthlyChartData = useMemo(() => {
+    if (!data) return [];
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return data.summary.monthly.map((m) => ({
+      name: monthNames[parseInt(m.month.split("-")[1], 10) - 1],
+      Created: m.createdCount,
+      Completed: m.completedCount,
     }));
+  }, [data]);
+
+  const failureTrendData = useMemo(() => {
+    if (!data) return [];
+    return data.summary.failureTrends.slice(-14).map((t) => ({
+      name: t.bucket.slice(5),
+      Failures: t.failures,
+    }));
+  }, [data]);
+
+  const findingsBySectorData = useMemo(() => {
+    if (!data) return [];
+    return data.summary.unresolvedBySector.slice(0, 8).map((s) => ({
+      name: s.sectorName,
+      Findings: s.failures,
+    }));
+  }, [data]);
+
+  const recentOverdueJobs = useMemo(() => {
+    if (!data) return [];
+    return data.summary.overdueJobs.slice(0, 5);
+  }, [data]);
+
+  if (loading) {
+    return (
+      <main className="app-shell">
+        <section className="hero-card">
+          <div>
+            <p className="eyebrow">Maintenance Management</p>
+            <h1>Dashboard</h1>
+            <p className="subtle">Loading dashboard data...</p>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -315,197 +263,236 @@ export function MaintenanceDashboard({
       <section className="hero-card">
         <div>
           <p className="eyebrow">Maintenance Management</p>
-          <h1>Domain-Driven Maintenance App</h1>
+          <h1>Maintenance Dashboard</h1>
           <p className="subtle">
-            Checklist-first inspections, corrective jobs, and reporting projections.
+            Real-time overview of maintenance operations, job status, and inspection findings.
           </p>
         </div>
       </section>
 
-      {error ? (
-        <section className="error-banner" data-testid="error-banner">
-          {error}
-        </section>
-      ) : null}
+      {error ? <section className="error-banner">{error}</section> : null}
 
-      <section className="grid-cards">
-        <article className="card">
-          <h2>Sector Checklist Session</h2>
-          <form className="stack" onSubmit={submitChecklistSession} data-testid="checklist-session-form">
-            <div className="actions">
-              <button type="button" className="btn-secondary" onClick={seedCatalog} data-testid="seed-catalog-button">
-                Seed Baseline Catalog
-              </button>
-            </div>
-            <div className="field-row">
-              <label>
-                Inspector
-                <input
-                  data-testid="inspector-input"
-                  value={inspector}
-                  onChange={(event) => setInspector(event.target.value)}
-                  required
+      <section className="dashboard-grid">
+        <div className="kpi-card">
+          <div className="kpi-icon" style={{ background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary})` }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          </div>
+          <div className="kpi-content">
+            <p className="kpi-label">Total Jobs</p>
+            <p className="kpi-value">{stats?.totalJobs ?? 0}</p>
+            <p className="kpi-sub">{stats?.jobsCreatedThisMonth ?? 0} created this month</p>
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-icon" style={{ background: `linear-gradient(135deg, ${COLORS.warning}, #d97706)` }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12,6 12,12 16,14" />
+            </svg>
+          </div>
+          <div className="kpi-content">
+            <p className="kpi-label">Overdue</p>
+            <p className="kpi-value" style={{ color: stats?.overdueCount ? COLORS.danger : "inherit" }}>
+              {stats?.overdueCount ?? 0}
+            </p>
+            <p className="kpi-sub">Require immediate attention</p>
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-icon" style={{ background: `linear-gradient(135deg, ${COLORS.secondary}, #15803d)` }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+              <polyline points="22,4 12,14.01 9,11.01" />
+            </svg>
+          </div>
+          <div className="kpi-content">
+            <p className="kpi-label">Completion Rate</p>
+            <p className="kpi-value">{stats?.completionRate ?? 0}%</p>
+            <p className="kpi-sub">{stats?.jobsCompletedThisMonth ?? 0} of {stats?.jobsCreatedThisMonth ?? 0} this month</p>
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-icon" style={{ background: `linear-gradient(135deg, ${COLORS.danger}, #b91c1c)` }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </div>
+          <div className="kpi-content">
+            <p className="kpi-label">Open Findings</p>
+            <p className="kpi-value" style={{ color: stats?.unresolvedFindings ? COLORS.danger : "inherit" }}>
+              {stats?.unresolvedFindings ?? 0}
+            </p>
+            <p className="kpi-sub">{stats?.sourceLinkedJobs ?? 0} linked to jobs</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="dashboard-grid-2">
+        <article className="card chart-card">
+          <h2>Monthly Job Trends</h2>
+          <p className="chart-subtitle">Jobs created vs completed over the year</p>
+          <div className="chart-container">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={monthlyChartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" />
+                <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 12 }} />
+                <YAxis tick={{ fill: "var(--muted)", fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--surface-border)",
+                    borderRadius: "8px",
+                  }}
                 />
-              </label>
-              <label>
-                Inspection Date
-                <input
-                  data-testid="inspection-date-input"
-                  type="datetime-local"
-                  value={inspectedAt}
-                  onChange={(event) => setInspectedAt(event.target.value)}
-                  required
-                />
-              </label>
-            </div>
-            <textarea
-              placeholder="Session notes"
-              value={sessionNotes}
-              onChange={(event) => setSessionNotes(event.target.value)}
-              rows={2}
-            />
-
-            <div className="checklist-catalog-grid" data-testid="sector-checklist-grid">
-              {sectors.map((sector) => (
-                <section key={sector.id} className="checklist-sector">
-                  <h3>{sector.name}</h3>
-                  <div className="stack">
-                    {sector.items.map((item) => {
-                      const key = `${sector.id}:${item.componentId}`;
-                      const current = observationValues[key] ?? {
-                        status: "NotInspected",
-                        comments: "",
-                        additionalNotes: "",
-                      };
-
-                      return (
-                        <div key={key} className="checklist-row">
-                          <p className="label">{item.componentName}</p>
-                          <select
-                            value={current.status}
-                            onChange={(event) => setObservationField(key, "status", event.target.value)}
-                          >
-                            {checklistStatusOptions.map((statusOption) => (
-                              <option key={statusOption}>{statusOption}</option>
-                            ))}
-                          </select>
-                          <input
-                            placeholder="Comments"
-                            value={current.comments}
-                            onChange={(event) => setObservationField(key, "comments", event.target.value)}
-                          />
-                          <input
-                            placeholder="Additional"
-                            value={current.additionalNotes}
-                            onChange={(event) =>
-                              setObservationField(key, "additionalNotes", event.target.value)
-                            }
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-              {sectors.length === 0 ? <p className="subtle">No catalog yet. Seed baseline to begin.</p> : null}
-            </div>
-
-            <button type="submit" className="btn-primary" data-testid="submit-checklist-button">
-              Submit Inspection Session
-            </button>
-          </form>
+                <Legend />
+                <Bar dataKey="Created" fill={COLORS.primary} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Completed" fill={COLORS.secondary} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </article>
 
-        <article className="card" data-testid="unresolved-findings-section">
-          <h2>Unresolved Findings</h2>
-          <ul className="stack list-tight">
-            {findings.slice(0, 12).map((finding) => (
-              <li key={finding.observationId}>
-                {finding.sectorName} / {finding.componentName} - {finding.linkedJobStatus ?? "No Job"}
-              </li>
-            ))}
-            {findings.length === 0 ? <li>No unresolved failed observations.</li> : null}
-          </ul>
+        <article className="card chart-card">
+          <h2>Job Status Distribution</h2>
+          <p className="chart-subtitle">Current status of all maintenance jobs</p>
+          <div className="chart-container">
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={statusPieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={2}
+                  dataKey="value"
+                  label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                  labelLine={false}
+                >
+                  {statusPieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name] || COLORS.info} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--surface-border)",
+                    borderRadius: "8px",
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </article>
       </section>
 
-      <section className="grid-cards">
-        <article className="card">
-          <h2>Reporting Snapshot</h2>
-          <div className="stats-grid" data-testid="reporting-section">
-            <div>
-              <p className="label">Overdue Jobs</p>
-              <strong>{summary?.overdueCount ?? 0}</strong>
-            </div>
-            <div>
-              <p className="label">Completion Rate</p>
-              <strong>{completionRate}%</strong>
-            </div>
-            <div>
-              <p className="label">Unresolved Findings</p>
-              <strong>{summary?.unresolvedFindingsCount ?? 0}</strong>
-            </div>
-            <div>
-              <p className="label">Source-Linked Jobs</p>
-              <strong>{summary?.sourceLinkedJobsCount ?? 0}</strong>
-            </div>
+      <section className="dashboard-grid-2">
+        <article className="card chart-card">
+          <h2>Failure Trends</h2>
+          <p className="chart-subtitle">Failed inspections over the last 14 days</p>
+          <div className="chart-container">
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={failureTrendData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" />
+                <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 12 }} />
+                <YAxis tick={{ fill: "var(--muted)", fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--surface-border)",
+                    borderRadius: "8px",
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Failures"
+                  stroke={COLORS.danger}
+                  strokeWidth={2}
+                  dot={{ fill: COLORS.danger, strokeWidth: 2 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
-          <ul className="stack list-tight">
-            {trends.slice(-5).map((trend) => (
-              <li key={trend.bucket}>
-                {trend.bucket}: {trend.failures} failures
-              </li>
-            ))}
-          </ul>
+        </article>
+
+        <article className="card chart-card">
+          <h2>Findings by Sector</h2>
+          <p className="chart-subtitle">Unresolved failures per maintenance sector</p>
+          <div className="chart-container">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={findingsBySectorData} layout="vertical" margin={{ top: 5, right: 30, left: 80, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" />
+                <XAxis type="number" tick={{ fill: "var(--muted)", fontSize: 12 }} />
+                <YAxis type="category" dataKey="name" tick={{ fill: "var(--muted)", fontSize: 12 }} width={80} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--surface-border)",
+                    borderRadius: "8px",
+                  }}
+                />
+                <Bar dataKey="Findings" fill={COLORS.danger} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </article>
+      </section>
+
+      <section className="dashboard-grid-2">
+        <article className="card chart-card">
+          <h2>Priority Distribution</h2>
+          <p className="chart-subtitle">Jobs breakdown by priority level</p>
+          <div className="chart-container">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={priorityBarData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" />
+                <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 12 }} />
+                <YAxis tick={{ fill: "var(--muted)", fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--surface-border",
+                    borderRadius: "8px",
+                  }}
+                />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {priorityBarData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={PRIORITY_COLORS[entry.name] || COLORS.info} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </article>
 
         <article className="card">
-          <h2>Jobs</h2>
-          <ul className="stack" data-testid="job-list">
-            {jobs.map((job) => (
-              <li key={job.id} className="job-item" data-testid={`job-${job.id}`}>
-                <div className="job-head">
-                  <div>
-                    <p className="label">{job.priority}</p>
-                    <h3>{job.title}</h3>
+          <h2>Overdue Jobs</h2>
+          <p className="chart-subtitle">Jobs past their due date requiring attention</p>
+          <div className="overdue-list">
+            {recentOverdueJobs.length > 0 ? (
+              recentOverdueJobs.map((job) => (
+                <div key={job.id} className="overdue-item">
+                  <div className="overdue-info">
+                    <p className="overdue-title">{job.title}</p>
+                    <p className="overdue-meta">
+                      {job.assignee ? `Assigned: ${job.assignee}` : "Unassigned"} • {job.daysOverdue} days overdue
+                    </p>
                   </div>
-                  <span className={`badge badge-${job.status.toLowerCase()}`}>{job.status}</span>
+                  <span className="badge badge-scheduled">{job.status}</span>
                 </div>
-                <p className="subtle">Due: {new Date(job.dueDate).toLocaleString()}</p>
-                <p className="subtle">Assignee: {job.assignedTo ?? "Unassigned"}</p>
-                <p className="subtle">Location: {metadataValue(job.location)}</p>
-                <p className="subtle">Sub-location: {metadataValue(job.subLocation)}</p>
-                <p className="subtle">Done by: {metadataValue(job.doneBy)}</p>
-                <p className="subtle">Checked by: {metadataValue(job.checkedBy)}</p>
-                <p className="subtle">Runs: {job.runLog.length}</p>
-                {job.sourceObservationContext ? (
-                  <p className="subtle">
-                    Source: {job.sourceObservationContext.sessionId} | {job.sourceObservationContext.sectorName} / {job.sourceObservationContext.componentName}
-                  </p>
-                ) : null}
-                <div className="actions">
-                  <button type="button" className="btn-secondary" onClick={() => mutateJob(job.id, "start")}>
-                    Start
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => logRun(job.id, outcomeOptions[0])}
-                    data-testid={`log-run-${job.id}`}
-                  >
-                    Log Run
-                  </button>
-                  <button type="button" className="btn-secondary" onClick={() => mutateJob(job.id, "complete")}>
-                    Complete
-                  </button>
-                  <button type="button" className="btn-secondary" onClick={() => mutateJob(job.id, "cancel")}>
-                    Cancel
-                  </button>
-                </div>
-              </li>
-            ))}
-            {jobs.length === 0 ? <li>No jobs yet.</li> : null}
-          </ul>
+              ))
+            ) : (
+              <p className="subtle">No overdue jobs. Great work!</p>
+            )}
+          </div>
         </article>
       </section>
     </main>
