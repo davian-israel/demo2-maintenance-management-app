@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DataTableComponent, type DataTableColumn } from "@/components/data-table";
 
 type Job = {
   id: string;
@@ -15,9 +16,20 @@ type Job = {
   checkedBy: string | null;
 };
 
-function metadataValue(value: string | null) {
+function metadataValue(value: string | null): string {
   return value && value.trim().length > 0 ? value : "Not set";
 }
+
+const columns: DataTableColumn[] = [
+  { title: "Priority", data: "priority", className: "font-medium" },
+  { title: "Title", data: "title" },
+  { title: "Status", data: "status", render: (data) => `<span class="badge badge-${String(data).toLowerCase()}">${data}</span>` },
+  { title: "Due Date", data: "dueDate", render: (data) => new Date(String(data)).toLocaleString() },
+  { title: "Assignee", data: "assignedTo", render: (data) => String(data || "Unassigned") },
+  { title: "Location", data: "location", render: (data) => metadataValue(data as string | null) },
+  { title: "Done By", data: "doneBy", render: (data) => metadataValue(data as string | null) },
+  { title: "Checked By", data: "checkedBy", render: (data) => metadataValue(data as string | null) },
+];
 
 export function JobsDirectory() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -65,26 +77,11 @@ export function JobsDirectory() {
 
       <section className="card">
         <h2>Jobs</h2>
-        <ul className="stack" data-testid="jobs-directory-list">
-          {jobs.map((job) => (
-            <li key={job.id} className="job-item">
-              <div className="job-head">
-                <div>
-                  <p className="label">{job.priority}</p>
-                  <h3>{job.title}</h3>
-                </div>
-                <span className={`badge badge-${job.status.toLowerCase()}`}>{job.status}</span>
-              </div>
-              <p className="subtle">Due: {new Date(job.dueDate).toLocaleString()}</p>
-              <p className="subtle">Assignee: {job.assignedTo ?? "Unassigned"}</p>
-              <p className="subtle">Location: {metadataValue(job.location)}</p>
-              <p className="subtle">Sub-location: {metadataValue(job.subLocation)}</p>
-              <p className="subtle">Done by: {metadataValue(job.doneBy)}</p>
-              <p className="subtle">Checked by: {metadataValue(job.checkedBy)}</p>
-            </li>
-          ))}
-          {jobs.length === 0 ? <li>No jobs yet.</li> : null}
-        </ul>
+        {jobs.length > 0 ? (
+          <DataTableComponent columns={columns} data={jobs} />
+        ) : (
+          <p>No jobs yet.</p>
+        )}
       </section>
     </main>
   );

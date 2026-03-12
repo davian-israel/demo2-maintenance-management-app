@@ -36,8 +36,8 @@ test("can create skill, create job, log run, and complete", async ({ page }) => 
   await page.getByTestId("create-skill-button").click();
   await expect(page.getByTestId("skill-list")).toContainText(skillName);
 
-  await page.getByTestId("sidebar-link-dashboard").click();
-  await expect(page).toHaveURL(/\/$/);
+  await page.getByTestId("sidebar-link-add-job").click();
+  await expect(page).toHaveURL(/\/jobs\/new$/);
 
   await page.getByTestId("job-title-input").fill(jobTitle);
   await page.getByTestId("job-due-date-input").fill(futureLocalDateTime());
@@ -47,6 +47,9 @@ test("can create skill, create job, log run, and complete", async ({ page }) => 
   await page.getByTestId("job-checked-by-input").fill("qa.supervisor");
   await page.getByTestId("create-job-button").click();
 
+  await expect(page.getByText(`Job '${jobTitle}' created successfully.`)).toBeVisible();
+
+  await page.getByTestId("sidebar-link-dashboard").click();
   await expect(page.getByTestId("job-list")).toContainText(jobTitle);
   await expect(page.getByTestId("job-list")).toContainText("Location: Main Facility");
   await expect(page.getByTestId("job-list")).toContainText("Sub-location: Pump Bay 3");
@@ -70,6 +73,32 @@ test("can create skill, create job, log run, and complete", async ({ page }) => 
   await expect(page.getByTestId("jobs-directory-list")).toContainText("Sub-location: Pump Bay 3");
   await expect(page.getByTestId("jobs-directory-list")).toContainText("Done by: tech.operator");
   await expect(page.getByTestId("jobs-directory-list")).toContainText("Checked by: qa.supervisor");
+});
+
+test("can create job from create job page", async ({ page }) => {
+  const runId = Date.now();
+  const jobTitle = `Test Job from Create Page (${runId})`;
+
+  await page.goto("/jobs/new");
+  await expect(page).toHaveURL(/\/jobs\/new$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Create New Job" })).toBeVisible();
+
+  await page.getByTestId("job-title-input").fill(jobTitle);
+  await page.getByTestId("job-due-date-input").fill(futureLocalDateTime(24));
+  await page.getByTestId("job-location-input").fill("Test Location");
+  await page.getByTestId("job-sublocation-input").fill("Test Sub-location");
+  await page.getByTestId("job-done-by-input").fill("test.user");
+  await page.getByTestId("job-checked-by-input").fill("test.qa");
+  await page.getByRole("combobox").selectOption("High");
+
+  await page.getByTestId("create-job-button").click();
+
+  await expect(page.getByText(`Job '${jobTitle}' created successfully.`)).toBeVisible();
+
+  await page.getByTestId("sidebar-link-jobs").click();
+  await expect(page.getByTestId("jobs-directory-list")).toContainText(jobTitle);
+  await expect(page.getByTestId("jobs-directory-list")).toContainText("Test Location");
+  await expect(page.getByTestId("jobs-directory-list")).toContainText("Test Sub-location");
 });
 
 test("dashboard removes inline skill catalog and uses sidebar skills page", async ({ page }) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { DataTableComponent, type DataTableColumn } from "@/components/data-table";
 
 type Skill = {
   id: string;
@@ -8,6 +9,12 @@ type Skill = {
   description: string | null;
   isActive: boolean;
 };
+
+const columns: DataTableColumn[] = [
+  { title: "Name", data: "name", className: "font-medium" },
+  { title: "Description", data: "description", render: (data): string => String(data || "-") },
+  { title: "Active", data: "isActive", render: (data): string => data ? "Yes" : "No" },
+];
 
 export function SkillsDirectory() {
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -115,10 +122,13 @@ export function SkillsDirectory() {
         </form>
 
         <ul className="chip-list" data-testid="skill-list">
-          {skills.map((skill) => (
-            <li key={skill.id}>{skill.name}</li>
-          ))}
-          {skills.length === 0 ? <li>No skills yet.</li> : null}
+          {skills.length > 0 ? (
+            <div style={{ width: "100%" }}>
+              <DataTableComponent columns={columns} data={skills} />
+            </div>
+          ) : (
+            <li>No skills yet.</li>
+          )}
         </ul>
       </section>
     </main>

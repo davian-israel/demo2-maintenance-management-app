@@ -136,23 +136,11 @@ export function MaintenanceDashboard({
   initialFindings,
   initialTrends,
 }: DashboardProps) {
-  const [skills, setSkills] = useState<Skill[]>(initialSkills);
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
   const [summary, setSummary] = useState<ReportSummary | null>(initialSummary);
   const [sectors, setSectors] = useState<Sector[]>(initialSectors);
   const [findings, setFindings] = useState<Finding[]>(initialFindings);
   const [trends, setTrends] = useState<FailureTrend[]>(initialTrends);
-
-  const [jobTitle, setJobTitle] = useState("");
-  const [jobDescription, setJobDescription] = useState("");
-  const [jobDueDate, setJobDueDate] = useState("");
-  const [jobAssignee, setJobAssignee] = useState("");
-  const [jobLocation, setJobLocation] = useState("");
-  const [jobSubLocation, setJobSubLocation] = useState("");
-  const [jobDoneBy, setJobDoneBy] = useState("");
-  const [jobCheckedBy, setJobCheckedBy] = useState("");
-  const [jobPriority, setJobPriority] = useState("Medium");
-  const [jobRequiredSkills, setJobRequiredSkills] = useState<string[]>([]);
 
   const [inspector, setInspector] = useState("tech.operator");
   const [inspectedAt, setInspectedAt] = useState(toLocalDateTimeValue());
@@ -182,21 +170,18 @@ export function MaintenanceDashboard({
     setError(null);
     try {
       const [
-        skillResponse,
         jobResponse,
         reportResponse,
         catalogResponse,
         findingsResponse,
         trendResponse,
       ] = await Promise.all([
-        request<{ skills: Skill[] }>("/api/skills"),
         request<{ jobs: Job[] }>("/api/jobs"),
         request<{ summary: ReportSummary }>("/api/reports/summary"),
         request<{ sectors: Sector[] }>("/api/checklist/catalog"),
         request<{ findings: Finding[] }>("/api/checklist/findings/unresolved"),
         request<{ trends: FailureTrend[] }>("/api/checklist/trends"),
       ]);
-      setSkills(skillResponse.skills);
       setJobs(jobResponse.jobs);
       setSummary(reportResponse.summary);
       setSectors(catalogResponse.sectors);
@@ -204,41 +189,6 @@ export function MaintenanceDashboard({
       setTrends(trendResponse.trends);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
-    }
-  }
-
-  async function createJob(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    try {
-      await request<{ job: Job }>("/api/jobs", {
-        method: "POST",
-        body: JSON.stringify({
-          title: jobTitle,
-          description: jobDescription || null,
-          dueDate: new Date(jobDueDate).toISOString(),
-          assignedTo: jobAssignee || null,
-          location: jobLocation || null,
-          subLocation: jobSubLocation || null,
-          doneBy: jobDoneBy || null,
-          checkedBy: jobCheckedBy || null,
-          priority: jobPriority,
-          requiredSkills: jobRequiredSkills,
-        }),
-      });
-      setJobTitle("");
-      setJobDescription("");
-      setJobDueDate("");
-      setJobAssignee("");
-      setJobLocation("");
-      setJobSubLocation("");
-      setJobDoneBy("");
-      setJobCheckedBy("");
-      setJobPriority("Medium");
-      setJobRequiredSkills([]);
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create job");
     }
   }
 
@@ -344,14 +294,6 @@ export function MaintenanceDashboard({
     }
   }
 
-  function toggleSkillSelection(skillId: string) {
-    setJobRequiredSkills((current) =>
-      current.includes(skillId)
-        ? current.filter((selected) => selected !== skillId)
-        : [...current, skillId],
-    );
-  }
-
   function setObservationField(
     key: string,
     field: "status" | "comments" | "additionalNotes",
@@ -385,99 +327,6 @@ export function MaintenanceDashboard({
           {error}
         </section>
       ) : null}
-
-      <section className="grid-cards">
-        <article className="card">
-          <h2>Create Job</h2>
-          <form className="stack" onSubmit={createJob}>
-            <input
-              data-testid="job-title-input"
-              placeholder="Replace filter on Pump #3"
-              value={jobTitle}
-              onChange={(event) => setJobTitle(event.target.value)}
-              required
-            />
-            <textarea
-              placeholder="Description"
-              value={jobDescription}
-              onChange={(event) => setJobDescription(event.target.value)}
-              rows={3}
-            />
-            <div className="field-row">
-              <label>
-                Due Date
-                <input
-                  data-testid="job-due-date-input"
-                  type="datetime-local"
-                  value={jobDueDate}
-                  onChange={(event) => setJobDueDate(event.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                Priority
-                <select value={jobPriority} onChange={(event) => setJobPriority(event.target.value)}>
-                  <option>Low</option>
-                  <option>Medium</option>
-                  <option>High</option>
-                  <option>Critical</option>
-                </select>
-              </label>
-            </div>
-            <input
-              placeholder="Assignee"
-              value={jobAssignee}
-              onChange={(event) => setJobAssignee(event.target.value)}
-            />
-            <div className="field-row">
-              <input
-                data-testid="job-location-input"
-                placeholder="Location"
-                value={jobLocation}
-                onChange={(event) => setJobLocation(event.target.value)}
-              />
-              <input
-                data-testid="job-sublocation-input"
-                placeholder="Sub-location"
-                value={jobSubLocation}
-                onChange={(event) => setJobSubLocation(event.target.value)}
-              />
-            </div>
-            <div className="field-row">
-              <input
-                data-testid="job-done-by-input"
-                placeholder="Done by"
-                value={jobDoneBy}
-                onChange={(event) => setJobDoneBy(event.target.value)}
-              />
-              <input
-                data-testid="job-checked-by-input"
-                placeholder="Checked by"
-                value={jobCheckedBy}
-                onChange={(event) => setJobCheckedBy(event.target.value)}
-              />
-            </div>
-            <div>
-              <p className="label">Required Skills</p>
-              <div className="checkbox-grid">
-                {skills.map((skill) => (
-                  <label key={skill.id} className="checkbox-item">
-                    <input
-                      type="checkbox"
-                      checked={jobRequiredSkills.includes(skill.id)}
-                      onChange={() => toggleSkillSelection(skill.id)}
-                    />
-                    {skill.name}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <button type="submit" className="btn-primary" data-testid="create-job-button">
-              Create Job
-            </button>
-          </form>
-        </article>
-      </section>
 
       <section className="grid-cards">
         <article className="card">

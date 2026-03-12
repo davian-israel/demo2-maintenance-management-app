@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { DataTableComponent, type DataTableColumn } from "@/components/data-table";
 
 type TeamMemberSkill = {
   skillId: string;
@@ -14,6 +15,20 @@ type TeamMember = {
   name: string;
   skills: TeamMemberSkill[];
 };
+
+function renderSkills(data: unknown): string {
+  const skills = data as TeamMemberSkill[];
+  if (!skills || skills.length === 0) {
+    return "No skills assigned";
+  }
+  return skills.map((s) => `${s.name} (${s.skillPercentage}%)`).join(", ");
+}
+
+const columns: DataTableColumn[] = [
+  { title: "Name", data: "name", className: "font-medium" },
+  { title: "ID", data: "teamMemberId" },
+  { title: "Skills", data: "skills", render: renderSkills },
+];
 
 export function TeamMembersDirectory() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -153,28 +168,11 @@ export function TeamMembersDirectory() {
         ) : null}
 
         <h2>Team Members</h2>
-        <ul className="stack" data-testid="team-members-directory-list">
-          {teamMembers.map((teamMember) => (
-            <li key={teamMember.teamMemberId} className="job-item">
-              <div className="job-head">
-                <h3>{teamMember.name}</h3>
-                <span className="badge">ID: {teamMember.teamMemberId}</span>
-              </div>
-              {teamMember.skills.length > 0 ? (
-                <ul className="chip-list">
-                  {teamMember.skills.map((skill) => (
-                    <li key={`${teamMember.teamMemberId}-${skill.skillId}`}>
-                      {skill.name} ({skill.skillPercentage}%)
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="subtle">No skills assigned.</p>
-              )}
-            </li>
-          ))}
-          {teamMembers.length === 0 ? <li>No team members yet.</li> : null}
-        </ul>
+        {teamMembers.length > 0 ? (
+          <DataTableComponent columns={columns} data={teamMembers} />
+        ) : (
+          <p>No team members yet.</p>
+        )}
       </section>
     </main>
   );
