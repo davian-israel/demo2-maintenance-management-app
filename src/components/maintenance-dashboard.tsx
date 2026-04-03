@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart,
@@ -267,6 +268,11 @@ export function MaintenanceDashboard() {
           <p className="subtle">
             Real-time overview of maintenance operations, job status, and inspection findings.
           </p>
+          <div className="actions" style={{ marginTop: "1rem" }}>
+            <Link className="btn-primary" href="/maintenance/check" data-testid="dashboard-maintenance-check-link">
+              Run maintenance checklist
+            </Link>
+          </div>
         </div>
       </section>
 

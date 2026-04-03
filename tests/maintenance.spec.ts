@@ -420,33 +420,41 @@ test("rejects unknown checklist sector/component payload", async ({ request }) =
   expect(response.status()).toBe(400);
 });
 
-test("checklist failure creates corrective job and resolves after completion", async ({ page }) => {
-  await page.goto("/");
+test("maintenance checklist: location, corrective job handoff, and return preserves session", async ({
+  page,
+}) => {
+  await page.goto("/maintenance/check");
 
-  await page.getByTestId("seed-catalog-button").click();
-  await expect(page.getByTestId("sector-checklist-grid")).toContainText("Main Hall");
+  const seedButton = page.getByTestId("seed-catalog-button");
+  if (await seedButton.isVisible()) {
+    await seedButton.click();
+    await expect(page.getByTestId("maintenance-location-select")).toBeVisible();
+  }
 
-  const firstStatusSelect = page.locator(".checklist-row select").first();
-  await firstStatusSelect.selectOption("Fail");
+  await page.getByTestId("maintenance-location-select").selectOption({ label: "Main Hall" });
+  await page.getByTestId("maintenance-inspector-input").fill("e2e.inspector");
+  await page.getByTestId("start-inspection-button").click();
 
-  const firstCommentInput = page
-    .locator(".checklist-row")
-    .first()
-    .locator("input[placeholder='Comments']");
-  await firstCommentInput.fill("Paint damage observed");
+  await expect(page.getByTestId("maintenance-session-active")).toBeVisible();
 
-  await page.getByTestId("submit-checklist-button").click();
+  const wallsRow = page.getByTestId("checklist-row-Walls");
+  await wallsRow.getByTestId("checklist-status-Walls").selectOption("Fail");
+  await wallsRow.locator("input[placeholder='Comments']").fill("Paint damage observed");
+  await wallsRow.locator("input[placeholder='Comments']").blur();
 
-  await expect(page.getByTestId("unresolved-findings-section")).toContainText("Scheduled");
-  await expect(page.getByTestId("job-list")).toContainText("Corrective:");
+  await wallsRow.getByTestId("log-corrective-job-Walls").click();
+  await expect(page).toHaveURL(/\/jobs\/new/);
 
-  const correctiveJob = page.locator("li.job-item", { hasText: "Corrective:" }).first();
-  await correctiveJob.getByRole("button", { name: "Start" }).click();
-  await correctiveJob.getByRole("button", { name: "Log Run" }).click();
-  await correctiveJob.getByRole("button", { name: "Complete" }).click();
+  await expect(page.getByTestId("job-location-input")).toHaveValue("Main Hall");
+  await expect(page.getByTestId("job-sublocation-input")).toHaveValue("Walls");
 
-  await expect(correctiveJob).toContainText("Completed");
-  await expect(page.getByTestId("unresolved-findings-section")).toContainText(
-    "No unresolved failed observations.",
-  );
+  const jobTitle = `E2E Handoff Job ${Date.now()}`;
+  await page.getByTestId("job-title-input").fill(jobTitle);
+  await page.getByTestId("job-due-date-input").fill(futureLocalDateTime(24));
+  await page.getByTestId("create-job-button").click();
+
+  await expect(page.getByText(`Job '${jobTitle}' created successfully.`)).toBeVisible();
+  await expect(page).toHaveURL(/\/maintenance\/check\?/);
+  await expect(page.getByTestId("maintenance-session-active")).toBeVisible();
+  await expect(page.getByTestId("checklist-status-Walls")).toHaveValue("Fail");
 });

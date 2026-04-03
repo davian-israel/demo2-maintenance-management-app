@@ -23,6 +23,17 @@ export interface ChecklistRepository {
   createInspectionSession(session: InspectionSession): Promise<void>;
   saveInspectionSession(session: InspectionSession): Promise<void>;
   getInspectionSessionById(sessionId: string): Promise<InspectionSession | null>;
+  createObservation(observation: Observation): Promise<void>;
+  updateObservation(
+    observationId: string,
+    data: {
+      status: Observation["status"];
+      observedAt: Date;
+      inspector: string;
+      comments: string | null;
+      additionalNotes: string | null;
+    },
+  ): Promise<void>;
   markObservationResolved(observationId: string, resolvedAt: Date): Promise<void>;
   listUnresolvedFindings(): Promise<UnresolvedFinding[]>;
   listFailureTrends(range: { from: Date; to: Date }): Promise<FailureTrendPoint[]>;

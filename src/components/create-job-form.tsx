@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { getSafeReturnPath } from "@/lib/safe-return-path";
 
 type Skill = {
   id: string;
@@ -32,6 +33,7 @@ function toLocalDateTimeValue(date = new Date()) {
 
 export function CreateJobForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -67,6 +69,21 @@ export function CreateJobForm() {
     loadSkills();
     setJobDueDate(toLocalDateTimeValue(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)));
   }, [loadSkills]);
+
+  useEffect(() => {
+    const loc = searchParams.get("location");
+    const sub = searchParams.get("subLocation");
+    const title = searchParams.get("title");
+    if (loc) {
+      setJobLocation(loc);
+    }
+    if (sub) {
+      setJobSubLocation(sub);
+    }
+    if (title) {
+      setJobTitle(title);
+    }
+  }, [searchParams]);
 
   function toggleSkillSelection(skillId: string) {
     setJobRequiredSkills((current) =>
@@ -117,9 +134,11 @@ export function CreateJobForm() {
       setJobPriority("Medium");
       setJobRequiredSkills([]);
 
+      const returnTo = getSafeReturnPath(searchParams.get("returnTo"));
+      const destination = returnTo ?? "/jobs";
       setTimeout(() => {
-        router.push("/jobs");
-      }, 1500);
+        router.push(destination);
+      }, returnTo ? 900 : 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create job");
     } finally {

@@ -212,6 +212,45 @@ export class PrismaChecklistRepository implements ChecklistRepository {
     });
   }
 
+  async createObservation(observation: Observation): Promise<void> {
+    await prisma.observation.create({
+      data: {
+        id: observation.id,
+        sessionId: observation.sessionId,
+        sectorId: observation.sectorId,
+        componentId: observation.componentId,
+        status: observation.status,
+        observedAt: observation.observedAt,
+        inspector: observation.inspector,
+        comments: observation.comments,
+        additionalNotes: observation.additionalNotes,
+        resolvedAt: observation.resolvedAt,
+      },
+    });
+  }
+
+  async updateObservation(
+    observationId: string,
+    data: {
+      status: Observation["status"];
+      observedAt: Date;
+      inspector: string;
+      comments: string | null;
+      additionalNotes: string | null;
+    },
+  ): Promise<void> {
+    await prisma.observation.update({
+      where: { id: observationId },
+      data: {
+        status: data.status,
+        observedAt: data.observedAt,
+        inspector: data.inspector,
+        comments: data.comments,
+        additionalNotes: data.additionalNotes,
+      },
+    });
+  }
+
   async getInspectionSessionById(sessionId: string): Promise<InspectionSession | null> {
     const row = await prisma.inspectionSession.findUnique({
       where: { id: sessionId },

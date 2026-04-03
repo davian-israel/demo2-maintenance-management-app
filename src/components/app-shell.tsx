@@ -11,6 +11,7 @@ type AppShellProps = {
 
 const navItems = [
   { href: "/", label: "Dashboard", testId: "sidebar-link-dashboard" },
+  { href: "/maintenance/check", label: "Maintenance check", testId: "sidebar-link-maintenance-check" },
   { href: "/jobs", label: "Jobs", testId: "sidebar-link-jobs" },
   { href: "/jobs/new", label: "Add New Job", testId: "sidebar-link-add-job" },
   { href: "/skills", label: "Skill Catalog", testId: "sidebar-link-skills" },

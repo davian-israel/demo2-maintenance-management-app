@@ -1,4 +1,11 @@
-import { createInspectionSessionSchema, getTrendsSchema, upsertSectorSchema, type CreateInspectionSessionInput, type UpsertSectorInput } from "@/application/checklist/contracts";
+import {
+  createInspectionSessionSchema,
+  getTrendsSchema,
+  recordObservationSchema,
+  upsertSectorSchema,
+  type CreateInspectionSessionInput,
+  type UpsertSectorInput,
+} from "@/application/checklist/contracts";
 import type { ChecklistRepository } from "@/application/checklist/checklist-repository";
 import type { JobRepository } from "@/application/jobs/job-repository";
 import { Job } from "@/domain/job/job";
@@ -27,6 +34,10 @@ export class ChecklistService {
 
   async listCatalog() {
     return this.checklistRepository.listSectors();
+  }
+
+  async getInspectionSession(sessionId: string) {
+    return this.checklistRepository.getInspectionSessionById(sessionId);
   }
 
   async upsertSector(input: UpsertSectorInput) {
@@ -102,6 +113,63 @@ export class ChecklistService {
 
     await this.checklistRepository.createInspectionSession(aggregate.snapshot);
     return aggregate.snapshot;
+  }
+
+  async recordObservation(sessionId: string, inspector: string, input: unknown) {
+    const valid = recordObservationSchema.parse(input);
+    const session = await this.checklistRepository.getInspectionSessionById(sessionId);
+    if (!session) {
+      throw new Error("Inspection session not found.");
+    }
+    if (session.finalizedAt) {
+      throw new Error("Inspection session is finalized.");
+    }
+
+    const resolved = await this.checklistRepository.resolveSectorComponent(valid.sectorName, valid.componentName);
+    if (!resolved) {
+      throw new Error(`Unknown sector/component '${valid.sectorName} / ${valid.componentName}'.`);
+    }
+
+    const observedAt = valid.observedAt ?? new Date();
+    const comments = valid.comments ?? null;
+    const additionalNotes = valid.additionalNotes ?? null;
+
+    const existing = session.observations.find(
+      (observation) =>
+        observation.sectorId === resolved.sectorId && observation.componentId === resolved.componentId,
+    );
+
+    if (existing) {
+      await this.checklistRepository.updateObservation(existing.id, {
+        status: valid.status,
+        observedAt,
+        inspector,
+        comments,
+        additionalNotes,
+      });
+    } else {
+      const aggregate = InspectionSessionAggregate.rehydrate(session);
+      aggregate.addObservation({
+        sectorId: resolved.sectorId,
+        sectorName: resolved.sectorName,
+        componentId: resolved.componentId,
+        componentName: resolved.componentName,
+        status: valid.status,
+        observedAt,
+        inspector,
+        comments,
+        additionalNotes,
+      });
+      const snapshot = aggregate.snapshot;
+      const created = snapshot.observations[snapshot.observations.length - 1];
+      await this.checklistRepository.createObservation(created);
+    }
+
+    const updated = await this.checklistRepository.getInspectionSessionById(sessionId);
+    if (!updated) {
+      throw new Error("Inspection session not found after update.");
+    }
+    return updated;
   }
 
   async finalizeInspectionSession(sessionId: string) {

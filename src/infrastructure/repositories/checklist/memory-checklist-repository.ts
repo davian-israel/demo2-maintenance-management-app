@@ -105,6 +105,50 @@ export class MemoryChecklistRepository implements ChecklistRepository {
     });
   }
 
+  async createObservation(observation: Observation): Promise<void> {
+    memoryStore.observations.set(observation.id, structuredClone(observation));
+    const session = memoryStore.sessions.get(observation.sessionId);
+    if (!session) {
+      return;
+    }
+    session.observations.push(structuredClone(observation));
+    memoryStore.sessions.set(session.id, structuredClone(session));
+  }
+
+  async updateObservation(
+    observationId: string,
+    data: {
+      status: Observation["status"];
+      observedAt: Date;
+      inspector: string;
+      comments: string | null;
+      additionalNotes: string | null;
+    },
+  ): Promise<void> {
+    const observation = memoryStore.observations.get(observationId);
+    if (!observation) {
+      return;
+    }
+    const next: Observation = {
+      ...observation,
+      status: data.status,
+      observedAt: data.observedAt,
+      inspector: data.inspector,
+      comments: data.comments,
+      additionalNotes: data.additionalNotes,
+    };
+    memoryStore.observations.set(observationId, next);
+
+    const session = memoryStore.sessions.get(next.sessionId);
+    if (!session) {
+      return;
+    }
+    session.observations = session.observations.map((entry) =>
+      entry.id === observationId ? structuredClone(next) : entry,
+    );
+    memoryStore.sessions.set(session.id, structuredClone(session));
+  }
+
   async getInspectionSessionById(sessionId: string): Promise<InspectionSession | null> {
     return structuredClone(memoryStore.sessions.get(sessionId) ?? null);
   }

@@ -11,6 +11,7 @@
     "test:import": "node --test scripts/lib/sabbath-import.test.js",
     "test:seed": "node --test scripts/lib/baseline-team-members.test.js scripts/lib/team-member-seed.test.js scripts/lib/prisma-runtime-config.test.js",
     "test:deploy": "node --test scripts/lib/vercel-readiness.test.js scripts/lib/prisma-runtime-config.test.js",
+    "test:lib": "tsx --test src/lib/safe-return-path.test.ts",
     "import:sabbath": "DATABASE_URL=${DATABASE_URL:-file:./dev.db} node scripts/sqlite-migrate.js && DATABASE_URL=${DATABASE_URL:-file:./dev.db} node scripts/import-sabbath-data.js",
     "seed:team-members": "DATABASE_URL=${DATABASE_URL:-file:./dev.db} node scripts/sqlite-migrate.js && DATABASE_URL=${DATABASE_URL:-file:./dev.db} node scripts/seed-team-members.js",
     "deploy:vercel:preflight": "node scripts/vercel-preflight.js --target=preview",
@@ -41,6 +42,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
