@@ -36,6 +36,10 @@ export class ChecklistService {
     return this.checklistRepository.listSectors();
   }
 
+  async listInspectionSessions() {
+    return this.checklistRepository.listInspectionSessions();
+  }
+
   async getInspectionSession(sessionId: string) {
     return this.checklistRepository.getInspectionSessionById(sessionId);
   }

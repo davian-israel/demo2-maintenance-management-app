@@ -1,6 +1,7 @@
 import type {
   FailureTrendPoint,
   InspectionSession,
+  InspectionSessionSummary,
   Observation,
   Sector,
   UnresolvedFinding,
@@ -14,6 +15,7 @@ export type SectorComponentResolution = {
 };
 
 export interface ChecklistRepository {
+  listInspectionSessions(): Promise<InspectionSessionSummary[]>;
   listSectors(): Promise<Sector[]>;
   upsertSector(input: {
     name: string;

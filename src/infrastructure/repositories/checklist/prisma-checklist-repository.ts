@@ -3,6 +3,7 @@ import {
   OBSERVATION_STATUSES,
   type FailureTrendPoint,
   type InspectionSession,
+  type InspectionSessionSummary,
   type Observation,
   type ObservationStatus,
   type Sector,
@@ -73,6 +74,30 @@ function toObservation(row: {
 }
 
 export class PrismaChecklistRepository implements ChecklistRepository {
+  async listInspectionSessions(): Promise<InspectionSessionSummary[]> {
+    const rows = await prisma.inspectionSession.findMany({
+      include: {
+        _count: {
+          select: { observations: true },
+        },
+        observations: {
+          where: { status: "Fail" },
+          select: { id: true },
+        },
+      },
+      orderBy: { inspectedAt: "desc" },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      inspector: row.inspector,
+      inspectedAt: row.inspectedAt,
+      finalizedAt: row.finalizedAt,
+      observationCount: row._count.observations,
+      failCount: row.observations.length,
+    }));
+  }
+
   async listSectors(): Promise<Sector[]> {
     const rows = await prisma.sector.findMany({
       include: {

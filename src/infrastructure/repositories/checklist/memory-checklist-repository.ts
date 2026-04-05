@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ChecklistRepository, SectorComponentResolution } from "@/application/checklist/checklist-repository";
-import type { FailureTrendPoint, InspectionSession, Observation, Sector, UnresolvedFinding } from "@/domain/checklist/types";
+import type { FailureTrendPoint, InspectionSession, InspectionSessionSummary, Observation, Sector, UnresolvedFinding } from "@/domain/checklist/types";
 import { memoryStore } from "@/infrastructure/repositories/memory-store";
 
 function normalize(value: string) {
@@ -8,6 +8,19 @@ function normalize(value: string) {
 }
 
 export class MemoryChecklistRepository implements ChecklistRepository {
+  async listInspectionSessions(): Promise<InspectionSessionSummary[]> {
+    return [...memoryStore.sessions.values()]
+      .map((session) => ({
+        id: session.id,
+        inspector: session.inspector,
+        inspectedAt: session.inspectedAt,
+        finalizedAt: session.finalizedAt,
+        observationCount: session.observations.length,
+        failCount: session.observations.filter((o) => o.status === "Fail").length,
+      }))
+      .sort((a, b) => b.inspectedAt.getTime() - a.inspectedAt.getTime());
+  }
+
   async listSectors(): Promise<Sector[]> {
     return [...memoryStore.sectors.values()]
       .map((sector) => structuredClone(sector))

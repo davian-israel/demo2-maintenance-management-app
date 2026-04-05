@@ -458,3 +458,63 @@ test("maintenance checklist: location, corrective job handoff, and return preser
   await expect(page.getByTestId("maintenance-session-active")).toBeVisible();
   await expect(page.getByTestId("checklist-status-Walls")).toHaveValue("Fail");
 });
+
+test("maintenance checks directory: list sessions and open detail dialog", async ({
+  page,
+  request,
+}) => {
+  await request.post("/api/checklist/seed");
+
+  const sessionResponse = await request.post("/api/checklist/sessions", {
+    data: {
+      inspector: "e2e.directory",
+      inspectedAt: new Date().toISOString(),
+      observations: [
+        {
+          sectorName: "Main Hall",
+          componentName: "Walls",
+          status: "Pass",
+          comments: "All good",
+        },
+        {
+          sectorName: "Main Hall",
+          componentName: "Floor",
+          status: "Fail",
+          comments: "Crack noticed",
+        },
+      ],
+    },
+  });
+  expect(sessionResponse.status()).toBe(201);
+
+  await page.goto("/maintenance/checks");
+  await expect(page).toHaveURL(/\/maintenance\/checks$/);
+
+  const listResponse = await request.get("/api/checklist/sessions");
+  expect(listResponse.status()).toBe(200);
+  const listPayload = (await listResponse.json()) as {
+    sessions: Array<{ id: string; inspector: string; observationCount: number; failCount: number }>;
+  };
+  expect(listPayload.sessions.length).toBeGreaterThan(0);
+
+  const targetSession = listPayload.sessions.find((s) => s.inspector === "e2e.directory");
+  expect(targetSession).toBeTruthy();
+  expect(targetSession!.observationCount).toBe(2);
+  expect(targetSession!.failCount).toBe(1);
+
+  await page.getByTestId("sidebar-link-maintenance-checks").click();
+  await expect(page).toHaveURL(/\/maintenance\/checks$/);
+  await expect(page.getByTestId("checks-directory-list")).toBeVisible();
+
+  const viewButton = page.getByTestId(`view-check-${targetSession!.id}`);
+  await viewButton.click();
+
+  await expect(page.getByTestId("checks-detail-dialog")).toBeVisible();
+  await expect(page.getByTestId("checks-detail-body")).toContainText("e2e.directory");
+  await expect(page.getByTestId("checks-detail-body")).toContainText("Walls");
+  await expect(page.getByTestId("checks-detail-body")).toContainText("Fail");
+  await expect(page.getByTestId("checks-detail-body")).toContainText("Crack noticed");
+
+  await page.getByTestId("close-checks-dialog").click();
+  await expect(page.getByTestId("checks-detail-dialog")).not.toBeVisible();
+});

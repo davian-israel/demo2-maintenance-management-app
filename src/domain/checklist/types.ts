@@ -59,6 +59,15 @@ export type UnresolvedFinding = {
   linkedJobStatus: string | null;
 };
 
+export type InspectionSessionSummary = {
+  id: string;
+  inspector: string;
+  inspectedAt: Date;
+  finalizedAt: Date | null;
+  observationCount: number;
+  failCount: number;
+};
+
 export type FailureTrendPoint = {
   bucket: string;
   failures: number;
